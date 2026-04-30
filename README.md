@@ -76,6 +76,36 @@ Use your deployed URL as the MCP endpoint:
 }
 ```
 
+## Hermes Agent local test config
+
+After starting the local HTTP server:
+
+```bash
+MCP_TRANSPORT=http PORT=3099 npm start
+```
+
+Add this to `~/.hermes/config.yaml`:
+
+```yaml
+mcp_servers:
+  mcp_app_server:
+    url: "http://127.0.0.1:3099/mcp"
+    timeout: 120
+    connect_timeout: 30
+```
+
+Then reload or restart Hermes Agent and test:
+
+```bash
+hermes mcp list
+hermes mcp test mcp_app_server
+```
+
+Expected tools:
+
+- `echo`
+- `server_info`
+
 ## Docker
 
 ```bash
