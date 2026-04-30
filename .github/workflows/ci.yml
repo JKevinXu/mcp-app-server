@@ -24,3 +24,4 @@ jobs:
       - run: npm run smoke:stdio
       - run: npm run smoke:http
       - run: npm run smoke:apps
+      - run: npm run smoke:remote

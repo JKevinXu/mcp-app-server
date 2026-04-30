@@ -9,6 +9,9 @@ A small, deployable Model Context Protocol (MCP) server intended as a GitHub pro
 - `stdio` transport for local MCP clients
 - Streamable HTTP endpoint at `POST /mcp` for hosted deployment
 - Health endpoint at `GET /health`
+- Remote deployment metadata endpoint at `GET /`
+- Optional bearer-token authorization for remote `/mcp` traffic
+- Configurable CORS headers for browser-hosted MCP Apps clients
 - Single-file bundled app resource served as `text/html;profile=mcp-app`
 - Dockerfile for container hosting
 - GitHub Actions CI
@@ -46,6 +49,7 @@ npm run build
 npm run smoke:stdio
 npm run smoke:http
 npm run smoke:apps
+npm run smoke:remote
 ```
 
 Run HTTP mode after building:
@@ -83,6 +87,27 @@ Use your deployed URL as the MCP endpoint:
   }
 }
 ```
+
+If `MCP_BEARER_TOKEN` is configured on the remote server, include the matching authorization header:
+
+```json
+{
+  "mcpServers": {
+    "mcp-app-server": {
+      "url": "https://YOUR_HOST/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_TOKEN"
+      }
+    }
+  }
+}
+```
+
+Remote metadata endpoints:
+
+- `GET /`: service metadata, MCP endpoint, health endpoint, app resource URI
+- `GET /health`: health check plus remote MCP endpoint metadata
+- `POST /mcp`: Streamable HTTP MCP endpoint
 
 ## Hermes Agent local test config
 
@@ -133,13 +158,36 @@ Typical settings:
 - Port: read from `$PORT`, defaults to `3000`
 - MCP endpoint path: `/mcp`
 - Health check path: `/health`
+- Public URL: set `PUBLIC_URL=https://YOUR_HOST` so `/health` and `server_info` report the correct remote endpoint
+- Optional auth: set `MCP_BEARER_TOKEN` and configure clients with `Authorization: Bearer ...`
+- Optional CORS: set `MCP_CORS_ORIGIN=https://YOUR_CLIENT_ORIGIN` for browser-based hosts, or `*` for public demos
 
 If the hosting platform asks for a transport, choose Streamable HTTP.
+
+Example remote environment:
+
+```bash
+MCP_TRANSPORT=http
+PORT=3000
+PUBLIC_URL=https://YOUR_HOST
+MCP_BEARER_TOKEN=replace-with-a-long-random-token
+MCP_CORS_ORIGIN=*
+```
+
+After deployment:
+
+```bash
+curl https://YOUR_HOST/health
+hermes mcp test YOUR_REMOTE_SERVER_NAME
+```
 
 ## Environment variables
 
 - `MCP_TRANSPORT`: `stdio` or `http`
 - `PORT`: HTTP port, usually set automatically by hosting providers
+- `PUBLIC_URL`: public HTTPS origin for the deployed remote MCP server, for example `https://YOUR_HOST`
+- `MCP_BEARER_TOKEN`: optional bearer token required for `/mcp` requests
+- `MCP_CORS_ORIGIN`: CORS allow-origin value for `/mcp`, defaults to `*`
 - `MCP_SERVER_NAME`: optional server name override
 - `MCP_SERVER_VERSION`: optional server version override
 

@@ -19,7 +19,8 @@
     "smoke:http": "node scripts/smoke-http.mjs",
     "smoke:apps": "node scripts/smoke-apps.mjs",
     "build:server": "tsc -p tsconfig.json",
-    "build:app": "vite build"
+    "build:app": "vite build",
+    "smoke:remote": "node scripts/smoke-remote.mjs"
   },
   "keywords": [
     "mcp",

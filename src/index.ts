@@ -12,6 +12,10 @@ import { z } from "zod";
 
 const SERVER_NAME = process.env.MCP_SERVER_NAME ?? "mcp-app-server";
 const SERVER_VERSION = process.env.MCP_SERVER_VERSION ?? "0.1.0";
+const PUBLIC_URL = process.env.PUBLIC_URL?.replace(/\/$/, "");
+const MCP_ENDPOINT = PUBLIC_URL ? `${PUBLIC_URL}/mcp` : undefined;
+const MCP_BEARER_TOKEN = process.env.MCP_BEARER_TOKEN;
+const MCP_CORS_ORIGIN = process.env.MCP_CORS_ORIGIN ?? "*";
 const WEATHER_APP_URI = "ui://weather-dashboard/mcp-app.html";
 const DEFAULT_CITY = "San Francisco";
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -169,6 +173,9 @@ export function createServer() {
               version: SERVER_VERSION,
               node: process.version,
               transport: process.env.MCP_TRANSPORT ?? "stdio",
+              publicUrl: PUBLIC_URL,
+              mcpEndpoint: MCP_ENDPOINT,
+              authRequired: Boolean(MCP_BEARER_TOKEN),
               time: new Date().toISOString(),
             },
             null,
@@ -207,14 +214,78 @@ async function startStdio() {
   await server.connect(transport);
 }
 
+function withOptionalFields(base: Record<string, unknown>) {
+  if (MCP_ENDPOINT) base.mcpEndpoint = MCP_ENDPOINT;
+  if (PUBLIC_URL) base.publicUrl = PUBLIC_URL;
+  base.authRequired = Boolean(MCP_BEARER_TOKEN);
+  return base;
+}
+
+function applyMcpCors(_req: Request, res: Response) {
+  res.setHeader("Access-Control-Allow-Origin", MCP_CORS_ORIGIN);
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, Mcp-Session-Id, mcp-session-id");
+  res.setHeader("Access-Control-Expose-Headers", "Mcp-Session-Id, mcp-session-id");
+}
+
+function isAuthorized(req: Request) {
+  if (!MCP_BEARER_TOKEN) return true;
+  return req.header("authorization") === `Bearer ${MCP_BEARER_TOKEN}`;
+}
+
+function rejectUnauthorized(req: Request, res: Response) {
+  if (isAuthorized(req)) return false;
+  applyMcpCors(req, res);
+  res.status(401).json({
+    jsonrpc: "2.0",
+    error: { code: -32001, message: "Unauthorized: missing or invalid bearer token" },
+    id: req.body?.id ?? null,
+  });
+  return true;
+}
+
 async function startHttp() {
   const app = express();
+  app.set("trust proxy", true);
   app.use(express.json({ limit: "2mb" }));
 
   const transports = new Map<string, StreamableHTTPServerTransport>();
 
+  app.get("/", (_req: Request, res: Response) => {
+    res.json(
+      withOptionalFields({
+        ok: true,
+        name: SERVER_NAME,
+        version: SERVER_VERSION,
+        transport: "http",
+        healthEndpoint: "/health",
+        mcpEndpoint: MCP_ENDPOINT ?? "/mcp",
+        appResource: WEATHER_APP_URI,
+      }),
+    );
+  });
+
   app.get("/health", (_req: Request, res: Response) => {
-    res.json({ ok: true, name: SERVER_NAME, version: SERVER_VERSION });
+    res.json(
+      withOptionalFields({
+        ok: true,
+        name: SERVER_NAME,
+        version: SERVER_VERSION,
+        transport: "http",
+        mcpEndpoint: MCP_ENDPOINT ?? "/mcp",
+      }),
+    );
+  });
+
+  app.options("/mcp", (req: Request, res: Response) => {
+    applyMcpCors(req, res);
+    res.status(204).end();
+  });
+
+  app.use("/mcp", (req: Request, res: Response, next) => {
+    applyMcpCors(req, res);
+    if (rejectUnauthorized(req, res)) return;
+    next();
   });
 
   app.post("/mcp", async (req: Request, res: Response) => {
