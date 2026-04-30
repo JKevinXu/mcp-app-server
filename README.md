@@ -5,9 +5,11 @@ A small, deployable Model Context Protocol (MCP) server intended as a GitHub pro
 ## What it includes
 
 - TypeScript MCP server using `@modelcontextprotocol/sdk`
+- MCP Apps MVP using `@modelcontextprotocol/ext-apps`
 - `stdio` transport for local MCP clients
 - Streamable HTTP endpoint at `POST /mcp` for hosted deployment
 - Health endpoint at `GET /health`
+- Single-file bundled app resource served as `text/html;profile=mcp-app`
 - Dockerfile for container hosting
 - GitHub Actions CI
 - Example MCP client config
@@ -15,7 +17,12 @@ A small, deployable Model Context Protocol (MCP) server intended as a GitHub pro
 ## Tools
 
 - `echo`: returns a supplied message
+- `weather_dashboard`: opens an interactive MCP App weather dashboard and returns sample forecast data
 - `server_info`: returns server metadata and runtime details
+
+## MCP App resources
+
+- `ui://weather-dashboard/mcp-app.html`: bundled Weather Dashboard app UI resource
 
 ## Local development
 
@@ -38,6 +45,7 @@ npm run typecheck
 npm run build
 npm run smoke:stdio
 npm run smoke:http
+npm run smoke:apps
 ```
 
 Run HTTP mode after building:
@@ -104,6 +112,7 @@ hermes mcp test mcp_app_server
 Expected tools:
 
 - `echo`
+- `weather_dashboard`
 - `server_info`
 
 ## Docker

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Weather Dashboard</title>
+  </head>
+  <body>
+    <main id="app">
+      <h1>Weather Dashboard</h1>
+      <p id="summary">Waiting for a forecast from the host...</p>
+      <section id="forecast" aria-live="polite"></section>
+      <form id="weather-form">
+        <label>
+          City
+          <input id="city" name="city" value="San Francisco" />
+        </label>
+        <label>
+          Units
+          <select id="units" name="units">
+            <option value="fahrenheit">Fahrenheit</option>
+            <option value="celsius">Celsius</option>
+          </select>
+        </label>
+        <button id="getWeatherButton" type="submit">Refresh forecast</button>
+      </form>
+    </main>
+    <script type="module" src="/app/mcp-app.ts"></script>
+    <link rel="stylesheet" href="/app/styles.css" />
+  </body>
+</html>

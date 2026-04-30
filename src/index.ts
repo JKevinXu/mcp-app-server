@@ -1,13 +1,74 @@
 #!/usr/bin/env node
 import express, { type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { RESOURCE_MIME_TYPE, registerAppResource, registerAppTool } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 
 const SERVER_NAME = process.env.MCP_SERVER_NAME ?? "mcp-app-server";
 const SERVER_VERSION = process.env.MCP_SERVER_VERSION ?? "0.1.0";
+const WEATHER_APP_URI = "ui://weather-dashboard/mcp-app.html";
+const DEFAULT_CITY = "San Francisco";
+const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+
+type WeatherUnits = "fahrenheit" | "celsius";
+type ForecastDay = { day: string; high: number; low: number; condition: string };
+type WeatherPayload = {
+  city: string;
+  units: WeatherUnits;
+  generatedAt: string;
+  summary: string;
+  forecast: ForecastDay[];
+};
+
+function convertTemperature(value: number, units: WeatherUnits) {
+  return units === "celsius" ? Math.round(((value - 32) * 5) / 9) : value;
+}
+
+function buildWeatherPayload(city = DEFAULT_CITY, units: WeatherUnits = "fahrenheit"): WeatherPayload {
+  const normalizedCity = city.trim() || DEFAULT_CITY;
+  const fahrenheitForecast: ForecastDay[] = [
+    { day: "Today", high: 68, low: 55, condition: "Partly cloudy" },
+    { day: "Tomorrow", high: 71, low: 56, condition: "Sunny" },
+    { day: "Day 3", high: 66, low: 54, condition: "Light breeze" },
+  ];
+
+  return {
+    city: normalizedCity,
+    units,
+    generatedAt: new Date().toISOString(),
+    summary: `Sample forecast for ${normalizedCity}`,
+    forecast: fahrenheitForecast.map((day) => ({
+      ...day,
+      high: convertTemperature(day.high, units),
+      low: convertTemperature(day.low, units),
+    })),
+  };
+}
+
+async function readWeatherAppHtml() {
+  const candidates = [
+    path.resolve(moduleDir, "../app/mcp-app.html"),
+    path.resolve(process.cwd(), "dist/app/mcp-app.html"),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      return await fs.readFile(candidate, "utf8");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw error;
+      }
+    }
+  }
+
+  throw new Error("Built MCP app HTML was not found. Run `npm run build:app` first.");
+}
 
 export function createServer() {
   const server = new McpServer({
@@ -27,6 +88,68 @@ export function createServer() {
     async ({ message }) => ({
       content: [{ type: "text", text: message }],
     }),
+  );
+
+  registerAppResource(
+    server,
+    "Weather Dashboard App",
+    WEATHER_APP_URI,
+    {
+      title: "Weather Dashboard App",
+      description: "Interactive MCP Apps MVP UI for viewing and refreshing sample weather data.",
+      mimeType: RESOURCE_MIME_TYPE,
+      _meta: {
+        ui: {
+          csp: {
+            connectDomains: [],
+            resourceDomains: [],
+          },
+        },
+      },
+    },
+    async () => ({
+      contents: [
+        {
+          uri: WEATHER_APP_URI,
+          mimeType: RESOURCE_MIME_TYPE,
+          text: await readWeatherAppHtml(),
+          _meta: {
+            ui: {
+              csp: {
+                connectDomains: [],
+                resourceDomains: [],
+              },
+            },
+          },
+        },
+      ],
+    }),
+  );
+
+  registerAppTool(
+    server,
+    "weather_dashboard",
+    {
+      title: "Weather Dashboard",
+      description: "Show an interactive weather dashboard MCP App with sample forecast data.",
+      inputSchema: {
+        city: z.string().optional().describe("City to show in the sample forecast"),
+        units: z.enum(["fahrenheit", "celsius"]).optional().describe("Temperature units"),
+      },
+      _meta: {
+        ui: {
+          resourceUri: WEATHER_APP_URI,
+          invoked: "Opened weather dashboard",
+        },
+      },
+    },
+    async ({ city, units }) => {
+      const payload = buildWeatherPayload(city, units);
+      return {
+        content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+        structuredContent: payload,
+      };
+    },
   );
 
   server.registerTool(

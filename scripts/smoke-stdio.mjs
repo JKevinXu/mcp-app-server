@@ -31,7 +31,7 @@ while (Date.now() < deadline && !stdout.includes('"tools"')) {
 child.kill("SIGTERM");
 await Promise.race([once(child, "exit"), new Promise((resolve) => setTimeout(resolve, 500))]);
 
-if (!stdout.includes('"echo"') || !stdout.includes('"server_info"')) {
+if (!stdout.includes('"echo"') || !stdout.includes('"weather_dashboard"') || !stdout.includes('"server_info"')) {
   console.error("Smoke test failed");
   console.error("stdout:", stdout);
   console.error("stderr:", stderr);
