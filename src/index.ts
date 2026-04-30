@@ -88,24 +88,46 @@ async function startHttp() {
   const app = express();
   app.use(express.json({ limit: "2mb" }));
 
+  const transports = new Map<string, StreamableHTTPServerTransport>();
+
   app.get("/health", (_req: Request, res: Response) => {
     res.json({ ok: true, name: SERVER_NAME, version: SERVER_VERSION });
   });
 
   app.post("/mcp", async (req: Request, res: Response) => {
-    const server = createServer();
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => randomUUID(),
-      enableJsonResponse: true,
-    });
+    const sessionId = req.header("mcp-session-id");
+    let transport = sessionId ? transports.get(sessionId) : undefined;
 
-    res.on("close", () => {
-      transport.close().catch(() => undefined);
-      server.close().catch(() => undefined);
-    });
+    if (!transport) {
+      const isInitializeRequest = req.body?.method === "initialize";
+      if (!isInitializeRequest) {
+        res.status(400).json({
+          jsonrpc: "2.0",
+          error: { code: -32000, message: "Bad Request: No valid session ID provided" },
+          id: req.body?.id ?? null,
+        });
+        return;
+      }
+
+      const server = createServer();
+      transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+        onsessioninitialized: (newSessionId) => {
+          transports.set(newSessionId, transport!);
+        },
+        enableJsonResponse: true,
+      });
+
+      transport.onclose = () => {
+        if (transport?.sessionId) {
+          transports.delete(transport.sessionId);
+        }
+      };
+
+      await server.connect(transport);
+    }
 
     try {
-      await server.connect(transport);
       await transport.handleRequest(req, res, req.body);
     } catch (error) {
       if (!res.headersSent) {
@@ -115,14 +137,30 @@ async function startHttp() {
             code: -32603,
             message: error instanceof Error ? error.message : "Internal server error",
           },
-          id: null,
+          id: req.body?.id ?? null,
         });
       }
     }
   });
 
-  app.get("/mcp", (_req: Request, res: Response) => {
-    res.status(405).json({ error: "Use POST /mcp for stateless Streamable HTTP MCP requests." });
+  app.get("/mcp", async (req: Request, res: Response) => {
+    const sessionId = req.header("mcp-session-id");
+    const transport = sessionId ? transports.get(sessionId) : undefined;
+    if (!transport) {
+      res.status(400).json({ error: "No valid MCP session. Initialize with POST /mcp first." });
+      return;
+    }
+    await transport.handleRequest(req, res);
+  });
+
+  app.delete("/mcp", async (req: Request, res: Response) => {
+    const sessionId = req.header("mcp-session-id");
+    const transport = sessionId ? transports.get(sessionId) : undefined;
+    if (!transport) {
+      res.status(400).json({ error: "No valid MCP session." });
+      return;
+    }
+    await transport.handleRequest(req, res);
   });
 
   const port = Number(process.env.PORT ?? 3000);

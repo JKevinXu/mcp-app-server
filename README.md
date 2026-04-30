@@ -34,8 +34,10 @@ curl http://localhost:3000/health
 ## Build and run
 
 ```bash
+npm run typecheck
 npm run build
-npm start
+npm run smoke:stdio
+npm run smoke:http
 ```
 
 Run HTTP mode after building:
