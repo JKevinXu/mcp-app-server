@@ -12,7 +12,7 @@ import { z } from "zod";
 
 const SERVER_NAME = process.env.MCP_SERVER_NAME ?? "mcp-app-server";
 const SERVER_VERSION = process.env.MCP_SERVER_VERSION ?? "0.1.0";
-const PUBLIC_URL = process.env.PUBLIC_URL?.replace(/\/$/, "");
+const PUBLIC_URL = (process.env.PUBLIC_URL ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined))?.replace(/\/$/, "");
 const MCP_ENDPOINT = PUBLIC_URL ? `${PUBLIC_URL}/mcp` : undefined;
 const MCP_BEARER_TOKEN = process.env.MCP_BEARER_TOKEN;
 const MCP_CORS_ORIGIN = process.env.MCP_CORS_ORIGIN ?? "*";
@@ -244,7 +244,7 @@ function rejectUnauthorized(req: Request, res: Response) {
   return true;
 }
 
-async function startHttp() {
+export function createHttpApp() {
   const app = express();
   app.set("trust proxy", true);
   app.use(express.json({ limit: "2mb" }));
@@ -357,6 +357,11 @@ async function startHttp() {
     await transport.handleRequest(req, res);
   });
 
+  return app;
+}
+
+async function startHttp() {
+  const app = createHttpApp();
   const port = Number(process.env.PORT ?? 3000);
   app.listen(port, () => {
     console.log(`${SERVER_NAME} listening on http://0.0.0.0:${port}`);
@@ -364,12 +369,18 @@ async function startHttp() {
   });
 }
 
-const transport = process.env.MCP_TRANSPORT ?? (process.env.PORT ? "http" : "stdio");
+function isMainModule() {
+  return process.argv[1] ? fileURLToPath(import.meta.url) === path.resolve(process.argv[1]) : false;
+}
 
-if (transport === "http") {
-  await startHttp();
-} else if (transport === "stdio") {
-  await startStdio();
-} else {
-  throw new Error(`Unsupported MCP_TRANSPORT=${transport}. Use "stdio" or "http".`);
+if (isMainModule()) {
+  const transport = process.env.MCP_TRANSPORT ?? (process.env.PORT ? "http" : "stdio");
+
+  if (transport === "http") {
+    await startHttp();
+  } else if (transport === "stdio") {
+    await startStdio();
+  } else {
+    throw new Error(`Unsupported MCP_TRANSPORT=${transport}. Use "stdio" or "http".`);
+  }
 }

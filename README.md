@@ -149,7 +149,27 @@ docker run --rm -p 3000:3000 -e MCP_TRANSPORT=http -e PORT=3000 mcp-app-server
 
 ## Deploying with MCP App / hosted MCP platforms
 
-This repository is ready for platforms that deploy from GitHub using a Dockerfile or Node build command.
+This repository is ready for platforms that deploy from GitHub using a Dockerfile, Node build command, or the included Vercel serverless adapter.
+
+## Deploying to Vercel
+
+This repo includes `vercel.json` and `api/index.ts` so Vercel can route `GET /`, `GET /health`, and `/mcp` to the MCP HTTP app.
+
+```bash
+npm run build
+vercel --prod --yes
+```
+
+If you use a Vercel token instead of a saved login:
+
+```bash
+vercel --prod --yes --token "$VERCEL_TOKEN"
+```
+
+Vercel sets `VERCEL_URL` automatically; the server uses it as `PUBLIC_URL` when `PUBLIC_URL` is not explicitly configured. For a custom production domain, set `PUBLIC_URL=https://YOUR_DOMAIN` in Vercel project environment variables.
+
+Note: Vercel serverless functions are suitable for a lightweight demo/MVP. For production MCP sessions at high scale or across multiple regions/instances, use shared session storage or deploy the Docker/Node server on a long-running host.
+
 
 Typical settings:
 
